@@ -1,144 +1,102 @@
+"""Educational clustering estimators. DBSCAN intentionally has no out-of-sample predict."""
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
+from scipy.special import logsumexp
 
-# Simple K-Means implementation
 class KMeans:
-    def __init__(self, n_clusters=2, max_iter=100, tol=1e-4, random_state=None):
-        self.n_clusters = n_clusters
-        self.max_iter = max_iter
-        self.tol = tol
-        self.random_state = random_state
-        self.centroids = None
-
-    def fit(self, X):
-        rng = np.random.RandomState(self.random_state)
-        # Init centroids randomly from points
-        indices = rng.choice(len(X), self.n_clusters, replace=False)
-        self.centroids = X[indices]
+    def __init__(self,n_clusters=2,max_iter=100,tol=1e-4,random_state=42):
+        self.n_clusters,self.max_iter,self.tol,self.random_state=n_clusters,max_iter,tol,random_state
+    def fit(self,X):
+        X=np.asarray(X,float); rng=np.random.default_rng(self.random_state)
+        if self.n_clusters>len(X): raise ValueError("n_clusters exceeds sample count")
+        self.centroids=X[rng.choice(len(X),self.n_clusters,replace=False)].copy()
+        self.inertia_history_=[]
         for _ in range(self.max_iter):
-            # Assign clusters
-            distances = np.linalg.norm(X[:, None, :] - self.centroids[None, :, :], axis=2)
-            labels = np.argmin(distances, axis=1)
-            new_centroids = np.array([X[labels == i].mean(axis=0) if np.any(labels == i) else self.centroids[i]
-                                      for i in range(self.n_clusters)])
-            if np.linalg.norm(new_centroids - self.centroids) < self.tol:
-                break
-            self.centroids = new_centroids
-        self.labels_ = labels
+            labels=self.predict(X)
+            centers=np.array([X[labels==i].mean(axis=0) if np.any(labels==i) else X[rng.integers(len(X))] for i in range(self.n_clusters)])
+            shift=np.linalg.norm(centers-self.centroids)
+            self.centroids=centers
+            self.inertia_history_.append(float(np.sum((X-self.centroids[self.predict(X)])**2)))
+            if shift<self.tol: break
+        self.labels_=self.predict(X)
+        self.inertia_=float(np.sum((X-self.centroids[self.labels_])**2))
         return self
+    def predict(self,X):
+        X=np.asarray(X,float)
+        return np.argmin(np.sum((X[:,None,:]-self.centroids[None,:,:])**2,axis=2),axis=1)
 
-    def predict(self, X):
-        distances = np.linalg.norm(X[:, None, :] - self.centroids[None, :, :], axis=2)
-        return np.argmin(distances, axis=1)
-
-# Simple Gaussian Mixture Model (EM) with diagonal covariances
 class GaussianMixture:
-    def __init__(self, n_components=2, max_iter=100, tol=1e-4, random_state=None):
-        self.n_components = n_components
-        self.max_iter = max_iter
-        self.tol = tol
-        self.random_state = random_state
-        self.means = None
-        self.covs = None
-        self.weights = None
-
-    def _gaussian(self, X, mean, cov):
-        # diagonal covariance
-        var = np.diag(cov)
-        coeff = 1.0 / np.sqrt((2 * np.pi) ** X.shape[1] * np.prod(var))
-        exp_term = np.exp(-0.5 * np.sum(((X - mean) ** 2) / var, axis=1))
-        return coeff * exp_term
-
-    def fit(self, X):
-        rng = np.random.RandomState(self.random_state)
-        n_samples, n_features = X.shape
-        # Initialize parameters
-        indices = rng.choice(n_samples, self.n_components, replace=False)
-        self.means = X[indices]
-        self.covs = np.array([np.cov(X.T) for _ in range(self.n_components)])
-        self.weights = np.full(self.n_components, 1 / self.n_components)
-        log_likelihood_old = -np.inf
+    def __init__(self,n_components=2,max_iter=100,tol=1e-4,random_state=42,reg_covar=1e-6):
+        self.n_components,self.max_iter,self.tol,self.random_state,self.reg_covar=n_components,max_iter,tol,random_state,reg_covar
+    def _log_components(self,X):
+        d=X.shape[1]; out=[]
+        for k in range(self.n_components):
+            var=np.maximum(self.covs[k],self.reg_covar)
+            out.append(np.log(max(self.weights[k],1e-300))-.5*(d*np.log(2*np.pi)+np.log(var).sum()+(((X-self.means[k])**2)/var).sum(axis=1)))
+        return np.column_stack(out)
+    def fit(self,X):
+        X=np.asarray(X,float); n,d=X.shape
+        rng=np.random.default_rng(self.random_state)
+        if self.n_components>n: raise ValueError("Too many components")
+        self.means=X[rng.choice(n,self.n_components,replace=False)].copy()
+        self.covs=np.tile(np.var(X,axis=0)+self.reg_covar,(self.n_components,1))
+        self.weights=np.full(self.n_components,1/self.n_components)
+        self.log_likelihood_history_=[]
         for _ in range(self.max_iter):
-            # E-step
-            resp = np.zeros((n_samples, self.n_components))
+            logp=self._log_components(X)
+            lognorm=logsumexp(logp,axis=1)
+            ll=float(lognorm.sum())
+            self.log_likelihood_history_.append(ll)
+            resp=np.exp(logp-lognorm[:,None])
+            nk=np.maximum(resp.sum(axis=0),1e-12)
+            self.weights=nk/n
+            self.means=(resp.T@X)/nk[:,None]
             for k in range(self.n_components):
-                resp[:, k] = self.weights[k] * self._gaussian(X, self.means[k], self.covs[k])
-            resp_sum = resp.sum(axis=1, keepdims=True)
-            resp = resp / resp_sum
-            # M-step
-            Nk = resp.sum(axis=0)
-            self.weights = Nk / n_samples
-            self.means = (resp.T @ X) / Nk[:, None]
-            for k in range(self.n_components):
-                diff = X - self.means[k]
-                self.covs[k] = np.diag((resp[:, k][:, None] * diff ** 2).sum(axis=0) / Nk[k])
-            # Compute log‑likelihood
-            ll = np.log(resp_sum).sum()
-            if abs(ll - log_likelihood_old) < self.tol:
-                break
-            log_likelihood_old = ll
-        self.labels_ = np.argmax(resp, axis=1)
+                self.covs[k]=(resp[:,k,None]*(X-self.means[k])**2).sum(axis=0)/nk[k]+self.reg_covar
+            if len(self.log_likelihood_history_)>1 and abs(ll-self.log_likelihood_history_[-2])<self.tol: break
+        self.labels_=self.predict(X)
+        self.lower_bound_=self.score(X)
         return self
+    def predict_proba(self,X):
+        logp=self._log_components(np.asarray(X,float))
+        return np.exp(logp-logsumexp(logp,axis=1)[:,None])
+    def predict(self,X):
+        return np.argmax(self.predict_proba(X),axis=1)
+    def score(self,X):
+        return float(logsumexp(self._log_components(np.asarray(X,float)),axis=1).mean())
 
-    def predict(self, X):
-        return self.labels_
-
-# Simple DBSCAN implementation (Euclidean distance)
 class DBSCAN:
-    def __init__(self, eps=0.5, min_samples=5):
-        self.eps = eps
-        self.min_samples = min_samples
-        self.labels_ = None
-
-    def fit(self, X):
-        n_samples = X.shape[0]
-        labels = np.full(n_samples, -1, dtype=int)  # -1 = noise
-        cluster_id = 0
-        # Precompute distance matrix
-        dist_matrix = np.linalg.norm(X[:, None, :] - X[None, :, :], axis=2)
-        for i in range(n_samples):
-            if labels[i] != -1:
-                continue
-            neighbors = np.where(dist_matrix[i] <= self.eps)[0]
-            if len(neighbors) < self.min_samples:
-                labels[i] = -1
-                continue
-            # Expand cluster
-            labels[i] = cluster_id
-            seeds = set(neighbors)
-            seeds.discard(i)
-            while seeds:
-                current = seeds.pop()
-                if labels[current] == -1:
-                    labels[current] = cluster_id
-                if labels[current] != -1:
-                    continue
-                labels[current] = cluster_id
-                current_neighbors = np.where(dist_matrix[current] <= self.eps)[0]
-                if len(current_neighbors) >= self.min_samples:
-                    seeds.update(current_neighbors)
-            cluster_id += 1
-        self.labels_ = labels
+    def __init__(self,eps=0.5,min_samples=5):
+        self.eps,self.min_samples=eps,min_samples
+    def fit(self,X):
+        X=np.asarray(X,float); n=len(X)
+        distances=np.linalg.norm(X[:,None,:]-X[None,:,:],axis=2)
+        neighbors=[np.flatnonzero(distances[i]<=self.eps) for i in range(n)]
+        core=np.array([len(nb)>=self.min_samples for nb in neighbors])
+        labels=np.full(n,-1,dtype=int); visited=np.zeros(n,bool); cid=0
+        from collections import deque
+        for i in range(n):
+            if visited[i]: continue
+            visited[i]=True
+            if not core[i]: continue
+            labels[i]=cid
+            queue=deque(neighbors[i]); queued=set(neighbors[i])
+            while queue:
+                j=queue.popleft()
+                if not visited[j]:
+                    visited[j]=True
+                    if core[j]:
+                        for k in neighbors[j]:
+                            if k not in queued:
+                                queue.append(k); queued.add(k)
+                if labels[j]==-1: labels[j]=cid
+            cid+=1
+        self.labels_=labels; self.core_sample_indices_=np.flatnonzero(core); self.components_=X[core].copy()
         return self
+    def fit_predict(self,X):
+        return self.fit(X).labels_
+    def predict(self,X):
+        raise NotImplementedError("DBSCAN has no native out-of-sample predict; use fit_predict on the evaluated dataset.")
 
-    def predict(self, X):
-        return self.labels_
-
-# Export helper functions
-def train_kmeans(X):
-    model = KMeans(random_state=42)
-    model.fit(X)
-    return model
-
-def train_gmm(X):
-    model = GaussianMixture(random_state=42)
-    model.fit(X)
-    return model
-
-def train_dbscan(X):
-    model = DBSCAN(eps=0.8, min_samples=5)
-    model.fit(X)
-    return model
-
+def train_kmeans(X): return KMeans().fit(X)
+def train_gmm(X): return GaussianMixture().fit(X)
+def train_dbscan(X): return DBSCAN(eps=0.8,min_samples=5).fit(X)

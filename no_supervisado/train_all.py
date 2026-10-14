@@ -1,45 +1,34 @@
-import sys, os
-# Add project root to PYTHONPATH so that prebuilt_models can be imported
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+"""Evaluate clustering on the full dataset: DBSCAN is transductive."""
+from pathlib import Path
+import sys,json,csv
+ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 import numpy as np
+from prebuilt_models.unsupervised import KMeans,GaussianMixture,DBSCAN
+from evaluation.metrics import clustering
+from evaluation.plots import clusters,save
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import train_test_split
-from prebuilt_models.unsupervised import train_kmeans, train_gmm, train_dbscan
-from sklearn.model_selection import train_test_split
-
-
-def load_dataset(name):
-    data = np.load(os.path.join('data', f'dataset_{name}.npz'))
-    return data['X']
-
-def main(model_type, dataset_name):
-    X = load_dataset(dataset_name)
-    # For unsupervised we still split to visualize train/test but labels are not used
-    X_train, X_test = train_test_split(X, test_size=0.2, random_state=42)
-    if model_type == 'kmeans':
-        model = train_kmeans(X_train)
-    elif model_type == 'gmm':
-        model = train_gmm(X_train)
-    elif model_type == 'dbscan':
-        model = train_dbscan(X_train)
-    else:
-        raise ValueError('Unknown model')
-    # Predict clusters on test set
-    labels = model.predict(X_test)
-    # Plot test points colored by cluster label
-    plt.figure(figsize=(6,5))
-    palette = sns.color_palette('deep', np.unique(labels).size)
-    sns.scatterplot(x=X_test[:,0], y=X_test[:,1], hue=labels, palette=palette, legend='full')
-    plt.title(f'{model_type.upper()} on {dataset_name} separation')
-    out_dir = os.path.join('results', model_type)
-    os.makedirs(out_dir, exist_ok=True)
-    plt.savefig(os.path.join(out_dir, f'{dataset_name}_plot.png'))
-    plt.close()
-
-if __name__ == '__main__':
-    for ds in ['well', 'semi', 'heavy']:
-        for mt in ['kmeans', 'gmm', 'dbscan']:
-            main(mt, ds)
-
+def main():
+    rows=[]
+    for ds in ("well","semi","heavy"):
+        d=np.load(ROOT/"data"/f"dataset_{ds}.npz");X,y=d["X"],d["y"]
+        for name,model in (("kmeans",KMeans()),("gmm",GaussianMixture()),("dbscan",DBSCAN(eps=.8))):
+            model.fit(X);labels=model.labels_
+            m=clustering(X,labels,y)
+            if name=="kmeans":m["inertia"]=model.inertia_
+            if name=="gmm":m["log_likelihood"]=model.score(X)
+            row={"dataset":ds,"model":name,**m};rows.append(row)
+            dest=ROOT/"results"/name;dest.mkdir(parents=True,exist_ok=True)
+            clusters(X,labels,str(dest/f"{ds}_clusters.png"),f"{name}: {ds}",getattr(model,"centroids",None))
+            if name=="kmeans":
+                plt.plot(model.inertia_history_);plt.xlabel("Iteración");plt.ylabel("Inercia")
+                save(str(dest/f"{ds}_inertia.png"))
+            if name=="gmm":
+                plt.plot(model.log_likelihood_history_);plt.xlabel("Iteración");plt.ylabel("Log-verosimilitud")
+                save(str(dest/f"{ds}_likelihood.png"))
+            print(row)
+    out=ROOT/"results"/"metrics";out.mkdir(parents=True,exist_ok=True)
+    (out/"unsupervised.json").write_text(json.dumps(rows,indent=2),encoding="utf-8")
+    keys=list(dict.fromkeys(k for row in rows for k in row))
+    with (out/"unsupervised.csv").open("w",newline="",encoding="utf-8") as f:
+        w=csv.DictWriter(f,fieldnames=keys);w.writeheader();w.writerows(rows)
+if __name__=="__main__":main()
