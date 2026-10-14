@@ -1,7 +1,11 @@
+import sys, os
+# Add project root to PYTHONPATH so that prebuilt_models can be imported
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
+from sklearn.model_selection import train_test_split
 from prebuilt_models.unsupervised import train_kmeans, train_gmm, train_dbscan
 from sklearn.model_selection import train_test_split
 
