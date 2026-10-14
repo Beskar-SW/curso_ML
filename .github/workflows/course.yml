@@ -1,0 +1,52 @@
+name: Generate course artifacts
+on:
+  push:
+    branches: [feature/curso-ml-completo]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Run complete course and verify generated artifacts
+        run: |
+          python run_course.py
+          python - <<'PY'
+          from pathlib import Path
+          root=Path("results")
+          assert (root/"EXPERIMENT_REPORT.md").exists()
+          for name in ("logistic","svm","rf"):
+              for ds in ("well","semi","heavy"):
+                  for suffix in ("confusion","learning_curve","validation_curve","roc","pr","decision"):
+                      p=root/name/f"{ds}_{suffix}.png"
+                      assert p.exists() and p.stat().st_size>1000,p
+          for name in ("kmeans","gmm","dbscan"):
+              for ds in ("well","semi","heavy"):
+                  p=root/name/f"{ds}_clusters.png"
+                  assert p.exists() and p.stat().st_size>1000,p
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: course-results
+          path: |
+            results/
+            docs/images/*.png
+      - name: Commit generated charts and experiment report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f results/ docs/images/*.png
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: publish verified course charts and measured results"
+            git push
+          fi
