@@ -1,8 +1,4 @@
-# Curso completo de Machine Learning: teoría, implementación y evaluación
-
-**Nivel:** introductorio a intermedio · **Lenguaje:** Python y NumPy · **Algoritmos:** seis · **Modalidad:** lectura + experimentos reproducibles.
-
-Este documento no sustituye los experimentos: primero lee la teoría, luego ejecuta los comandos del [README](README.md) y abre [el informe experimental](results/EXPERIMENT_REPORT.md) que se genera con métricas e imágenes reales. Los diagramas SVG incluidos aquí son **conceptuales**, no resultados inventados.
+# Curso completo de Machine Learning
 
 ## Índice
 
@@ -23,11 +19,11 @@ Este documento no sustituye los experimentos: primero lee la teoría, luego ejec
 
 ## 1. ¿Qué es aprender a partir de datos?
 
-En aprendizaje automático se ajusta una función $f_\\theta$ con parámetros $\\theta$ a partir de observaciones. El objetivo no es memorizar los datos, sino **generalizar** a observaciones nuevas.
+En aprendizaje automático se ajusta una función $f_\theta$ con parámetros $\theta$ a partir de observaciones. El objetivo no es memorizar los datos, sino **generalizar** a observaciones nuevas.
 
 ![Flujo de aprendizaje supervisado](docs/images/supervised_workflow.svg)
 
-**Aprendizaje supervisado:** se observan pares $(x_i,y_i)$. En clasificación binaria, $y_i\\in\\{0,1\\}$; la tarea es predecir una etiqueta a partir de características. En este curso, las coordenadas $(x_1,x_2)$ son las características y el grupo generador es la etiqueta.
+**Aprendizaje supervisado:** se observan pares $(x_i,y_i)$. En clasificación binaria, $y_i\in\{0,1\}$; la tarea es predecir una etiqueta a partir de características. En este curso, las coordenadas $(x_1,x_2)$ son las características y el grupo generador es la etiqueta.
 
 ![Flujo de aprendizaje no supervisado](docs/images/unsupervised_workflow.svg)
 
@@ -43,11 +39,11 @@ Se generan mediante `generate_data.py` con semilla 42, 500 observaciones y covar
 
 ## 2. Matemáticas, optimización y particiones
 
-Un modelo ajusta parámetros minimizando una **función de pérdida** $L(\\theta)$, que penaliza predicciones erróneas. En descenso del gradiente:
+Un modelo ajusta parámetros minimizando una **función de pérdida** $L(\theta)$, que penaliza predicciones erróneas. En descenso del gradiente:
 
-$$\\theta_{t+1}=\\theta_t-\\eta\\nabla_\\theta L(\\theta_t)$$
+$$\theta_{t+1}=\theta_t-\eta\nabla_\theta L(\theta_t)$$
 
-Aquí $\\eta$ es la tasa de aprendizaje. Una tasa demasiado grande puede oscilar; una muy pequeña puede tardar mucho. **Regularización** significa penalizar complejidad, por ejemplo $\\lambda\\|w\\|_2^2/2$.
+Aquí $\eta$ es la tasa de aprendizaje. Una tasa demasiado grande puede oscilar; una muy pequeña puede tardar mucho.
 
 Los **parámetros** se aprenden (pesos, centroides, covarianzas); los **hiperparámetros** se eligen (tasa, profundidad, $k$, epsilon). Para estimar generalización, separar entrenamiento, validación y prueba. La selección de hiperparámetros debe usar validación; el conjunto de prueba queda reservado para evaluación final.
 
@@ -63,24 +59,24 @@ $$z=w_1x_1+w_2x_2+b.$$
 
 La **función sigmoide** convierte $z$ en un valor entre 0 y 1:
 
-$$\\sigma(z)=\\frac{1}{1+e^{-z}}.$$
+$$\sigma(z)=\frac{1}{1+e^{-z}}.$$
 
 ![Sigmoide conceptual](docs/images/sigmoid.svg)
 
-Si $z=0$, la salida es $0.5$; si $z=\\ln(3)$, es $0.75$. Un valor de 0.75 significa probabilidad estimada del 75% **según el modelo**, no certeza de que el ejemplo sea positivo. El umbral habitual de decisión es 0.5, aunque puede modificarse para priorizar recall o precision.
+Si $z=0$, la salida es $0.5$; si $z=\ln(3)$, es $0.75$. Un valor de 0.75 significa probabilidad estimada del 75% **según el modelo**, no certeza de que el ejemplo sea positivo. El umbral habitual de decisión es 0.5, aunque puede modificarse para priorizar recall o precision.
 
 La derivada de la sigmoide es:
 
-$$\\sigma'(z)=\\sigma(z)(1-\\sigma(z)).$$
+$$\sigma'(z)=\sigma(z)(1-\sigma(z)).$$
 
 La **entropía cruzada binaria** penaliza probabilidades incorrectas:
 
-$$L=-\\frac1n\\sum_i\\left[y_i\\log p_i+(1-y_i)\\log(1-p_i)\\right].$$
+$$L=-\frac1n\sum_i\left[y_i\log p_i+(1-y_i)\log(1-p_i)\right].$$
 
-Con $p_i=\\sigma(w^\\top x_i+b)$, los gradientes son:
+Con $p_i=\sigma(w^\top x_i+b)$, los gradientes son:
 
-$$\\frac{\\partial L}{\\partial w}=\\frac1nX^\\top(p-y),\\qquad
-\\frac{\\partial L}{\\partial b}=\\frac1n\\sum_i(p_i-y_i).$$
+$$\frac{\partial L}{\partial w}=\frac1nX^\top(p-y),\qquad
+\frac{\partial L}{\partial b}=\frac1n\sum_i(p_i-y_i).$$
 
 La implementación de `prebuilt_models/supervised.py` utiliza NumPy y una forma numéricamente estable basada en `logaddexp` para evitar problemas con logaritmos de cero.
 
@@ -88,19 +84,22 @@ La implementación de `prebuilt_models/supervised.py` utiliza NumPy y una forma 
 
 **Experimento:** observa `results/logistic/well_loss.png` y `well_learning_curve.png`. Una pérdida de validación que empeora mientras la de entrenamiento disminuye es señal de posible sobreajuste. Comprueba también la matriz de confusión y ROC.
 
+![alt text](image-1.png)
+
 ## 4. Support Vector Machine (SVM) lineal
 
 **Pregunta:** ¿qué hiperplano separa mejor las clases y deja un margen amplio?
 
-La frontera se expresa como $w^\\top x+b=0$. Se usan etiquetas transformadas $t_i=2y_i-1$, con valores -1 y +1. El margen funcional es $t_i(w^\\top x_i+b)$; una predicción correcta con margen al menos 1 no incurre en hinge loss.
+La frontera se expresa como $w^\top x+b=0$. Se usan etiquetas transformadas $t_i=2y_i-1$, con valores -1 y +1. 
+<!-- El margen funcional es $t_i(w^\top x_i+b)$; una predicción correcta con margen al menos 1 no incurre en hinge loss. -->
 
-$$\\ell_i=\\max(0,1-t_i(w^\\top x_i+b)).$$
+<!-- $$\ell_i=\max(0,1-t_i(w^\top x_i+b)).$$ -->
 
-La función objetivo regularizada es:
+<!-- La función objetivo regularizada es:
 
-$$J(w,b)=\\frac{\\lambda}{2}\\|w\\|_2^2+\\frac1n\\sum_i\\ell_i.$$
+$$J(w,b)=\frac{\lambda}{2}\|w\|_2^2+\frac1n\sum_i\ell_i.$$ -->
 
-**Interpretación:** el primer término limita pesos grandes; el segundo penaliza violaciones del margen. El parámetro $\\lambda$ modifica el equilibrio. Los ejemplos cercanos al margen o mal clasificados determinan el gradiente de la pérdida hinge.
+<!-- **Interpretación:** el primer término limita pesos grandes; el segundo penaliza violaciones del margen. El parámetro $\lambda$ modifica el equilibrio. Los ejemplos cercanos al margen o mal clasificados determinan el gradiente de la pérdida hinge. -->
 
 **Diferencia frente a logística:** la SVM entrega una puntuación de margen, no una probabilidad calibrada. Para ROC/PR se usa `decision_function`. No debe interpretarse un margen de 2 como 200% de probabilidad.
 
@@ -108,11 +107,14 @@ $$J(w,b)=\\frac{\\lambda}{2}\\|w\\|_2^2+\\frac1n\\sum_i\\ell_i.$$
 
 **Experimento:** compara `results/svm/*_decision.png` con `*_validation_curve.png` al variar regularización.
 
+![alt text](image-2.png)
+
 ## 5. Árboles de decisión y Random Forest
 
-Un árbol pregunta sucesivamente si una característica supera un umbral. Cada división separa el conjunto en dos subconjuntos. En clasificación binaria, la impureza de Gini es:
+Un árbol pregunta sucesivamente si una característica supera un umbral. Cada división separa el conjunto en dos subconjuntos. 
+<!-- En clasificación binaria, la impureza de Gini es:
 
-$$G(S)=1-p_0^2-p_1^2=2p_1(1-p_1).$$
+$$G(S)=1-p_0^2-p_1^2=2p_1(1-p_1).$$ -->
 
 Si todos los ejemplos de un nodo son de una clase, $G=0$. Si las dos clases están al 50%, $G=0.5$. El árbol selecciona la división con menor impureza ponderada de los hijos.
 
@@ -124,13 +126,16 @@ Si todos los ejemplos de un nodo son de una clase, $G=0$. Si las dos clases est�
 
 **Diagnóstico de sobreajuste:** un bosque no tiene una pérdida por épocas comparable a descenso del gradiente. Usa `results/rf/*_learning_curve.png` y `*_validation_curve.png`, donde la complejidad se modifica mediante profundidad.
 
+
+![alt text](image.png)
+
 ## 6. K-Means (no supervisado)
 
 **Pregunta:** ¿cómo agrupar observaciones alrededor de $k$ centros?
 
 K-Means minimiza la suma de distancias cuadráticas al centro asignado, denominada **inercia**:
 
-$$J=\\sum_{i=1}^n\\min_{1\\leq j\\leq k}\\|x_i-\\mu_j\\|_2^2.$$
+$$J=\sum_{i=1}^n\min_{1\leq j\leq k}\|x_i-\mu_j\|_2^2.$$
 
 El procedimiento alterna dos operaciones: (1) asignar cada punto al centro más cercano; (2) recalcular cada centro como media de los puntos asignados. Repetir hasta convergencia o alcanzar el máximo de iteraciones.
 
@@ -142,17 +147,19 @@ El procedimiento alterna dos operaciones: (1) asignar cada punto al centro más 
 
 **Diagnósticos:** `results/kmeans/*_clusters.png` y `*_inertia.png`. La curva de inercia por iteración muestra convergencia; el **método del codo** requiere comparar distintos valores de $k$, no iteraciones. Silhouette, ARI y NMI ayudan a evaluar estructura y correspondencia con etiquetas conocidas.
 
+![alt text](image-3.png)
+
 ## 7. Gaussian Mixture Model (GMM)
 
 **Pregunta:** ¿puede cada punto pertenecer a distintos grupos con probabilidades diferentes?
 
 Un GMM modela la distribución como suma ponderada de gaussianas:
 
-$$p(x)=\\sum_{k=1}^K\\pi_k\\,\\mathcal N(x\\mid\\mu_k,\\Sigma_k),\\quad\\sum_k\\pi_k=1.$$
+$$p(x)=\sum_{k=1}^K\pi_k\,\mathcal N(x\mid\mu_k,\Sigma_k),\quad\sum_k\pi_k=1.$$
 
-Los pesos $\\pi_k$ son proporciones de mezcla; $\\mu_k$ son medias; $\\Sigma_k$ describe dispersión. La **responsabilidad** $r_{ik}$ es la probabilidad posterior de que el componente $k$ explique la observación $i$:
+Los pesos $\pi_k$ son proporciones de mezcla; $\mu_k$ son medias; $\Sigma_k$ describe dispersión. La **responsabilidad** $r_{ik}$ es la probabilidad posterior de que el componente $k$ explique la observación $i$:
 
-$$r_{ik}=\\frac{\\pi_k\\mathcal N(x_i\\mid\\mu_k,\\Sigma_k)}{\\sum_j\\pi_j\\mathcal N(x_i\\mid\\mu_j,\\Sigma_j)}.$$
+$$r_{ik}=\frac{\pi_k\mathcal N(x_i\mid\mu_k,\Sigma_k)}{\sum_j\pi_j\mathcal N(x_i\mid\mu_j,\Sigma_j)}.$$
 
 El algoritmo **Expectation-Maximization (EM)** alterna dos fases:
 
@@ -166,6 +173,9 @@ El algoritmo **Expectation-Maximization (EM)** alterna dos fases:
 **Ventajas:** agrupamiento suave y modelado probabilístico. **Limitaciones:** puede converger a óptimos locales, requiere fijar número de componentes y puede sufrir singularidades numéricas. **Esta implementación usa covarianzas diagonales**, no gaussianas con orientación arbitraria. **Hiperparámetros:** `n_components`, `max_iter`, `reg_covar`, `tol`.
 
 **Diagnósticos:** `results/gmm/*_clusters.png` y `*_likelihood.png`. La log-verosimilitud debe interpretarse con cuidado: más componentes pueden mejorar ajuste sin mejorar generalización. BIC/AIC serían extensiones razonables.
+
+
+![alt text](image-4.png)
 
 ## 8. DBSCAN (no supervisado)
 
@@ -228,6 +238,9 @@ Las métricas internas como silhouette no se definen con un solo grupo. Para DBS
 ![Curvas conceptuales de generalización](docs/images/generalization.svg)
 
 **Curva de aprendizaje:** eje X = cantidad de ejemplos de entrenamiento; eje Y = métrica. Dos curvas, entrenamiento y validación. Si convergen a un nivel bajo, investiga subajuste. Si persiste una brecha grande, investiga sobreajuste. Estas son heurísticas, no diagnósticos automáticos.
+
+
+![alt text](image-5.png)
 
 **Curva de validación:** eje X = hiperparámetro; eje Y = rendimiento en entrenamiento y validación. En este curso se explora `l2` (logística), `lambda_param` (SVM) y `max_depth` (Random Forest).
 
